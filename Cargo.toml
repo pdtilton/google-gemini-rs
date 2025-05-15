@@ -1,5 +1,7 @@
 [package]
 name = "google-gemini-rs"
+description = "A simple unofficial Rust wrapper around the Google Gemini API."
+license = "MIT"
 version = "0.1.0"
 edition = "2024"
 
