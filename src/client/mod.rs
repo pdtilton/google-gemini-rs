@@ -3,7 +3,6 @@ use std::path::Path;
 use base64::prelude::*;
 use enum_iterator::all;
 use file_format::FileFormat;
-use serde_json::from_str;
 use thiserror::Error;
 
 use crate::google::{
@@ -45,7 +44,7 @@ pub struct Responses(Vec<ContentResponse>);
 
 impl Responses {
     /// Squash multiple text responses into a single string.
-    pub fn extract_text(&self) -> Option<String> {
+    pub fn text(&self) -> Option<String> {
         let mut text = String::new();
         for content in &self.0 {
             for candidate in &content.candidates {
@@ -60,7 +59,7 @@ impl Responses {
     }
 
     /// Helper to extract the image mime types and Base64 encoded data.
-    pub fn extract_images(&self) -> Vec<(String, String)> {
+    pub fn images(&self) -> Vec<(String, String)> {
         let mut images = Vec::new();
         for content in &self.0 {
             for candidate in &content.candidates {
@@ -112,7 +111,7 @@ impl Client {
                 response_modalities: vec![Modality::Text, Modality::Image],
                 ..Default::default()
             },
-            GoogleModel::Gemini20Flash(_) => GenerationConfig {
+            GoogleModel::Gemini20Flash(_) | GoogleModel::Gemini25Flash(_) => GenerationConfig {
                 response_modalities: vec![Modality::Text],
                 ..Default::default()
             },
@@ -132,7 +131,7 @@ impl Client {
     }
 
     /// Mutate the client by setting the specified system instructions.  Some models do
-    /// not support system insturctions, so in these cases we front-load the system instructions
+    /// not support system instructions, so in these cases we front-load the system instructions
     /// as user text content.
     pub fn with_instruction(&mut self, system_instruction: &str) -> &mut Self {
         match self.model {
@@ -148,7 +147,7 @@ impl Client {
 
                 self.request.contents = contents;
             }
-            GoogleModel::Gemini20Flash(_) => {
+            GoogleModel::Gemini20Flash(_) | GoogleModel::Gemini25Flash(_) => {
                 self.request.system_instruction = Some(Content {
                     role: Role::User,
                     parts: vec![Part::Text(system_instruction.to_string())],
@@ -159,6 +158,9 @@ impl Client {
         self
     }
 
+    /// Since we're dealing with streams it is possible (?) for the stream to contain
+    /// a mixture of successful responses and errors.  For simplicity we bail on error
+    /// and return just the error, while we reconsolidate all successful responses.
     fn merge_response(&mut self, responses: &[ContentResponse]) -> Result<Responses, Error> {
         let mut success = Vec::new();
 
@@ -179,19 +181,18 @@ impl Client {
     }
 
     async fn post(&mut self) -> Result<Responses, Error> {
-        let responses = from_str::<Vec<ContentResponse>>(
+        self.merge_response(
             &self
                 .client
                 .post(self.url())
+                .header("Content-Type", "application/json")
                 .query(&[("key", &self.key)])
                 .json(&self.request)
                 .send()
                 .await?
-                .text()
+                .json::<Vec<ContentResponse>>()
                 .await?,
-        )?;
-
-        self.merge_response(&responses)
+        )
     }
 
     /// Send the given text to the model.  Returns the responses or an error
@@ -218,7 +219,7 @@ impl Client {
             .await
     }
 
-    /// Send the given iamge to the model.  This must be a UTF-8 Base64 encoded
+    /// Send the given image to the model.  This must be a UTF-8 Base64 encoded
     /// string which is required by the Google API.  Optional text may be sent with
     /// the image to create a single consolidated message.  Returns the responses
     /// or an error message if an error was returned.

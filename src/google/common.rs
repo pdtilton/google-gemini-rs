@@ -97,11 +97,11 @@ pub struct CodeExecutionResult {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum Part {
-    Tought(bool),
+    Thought(bool),
     Text(String),
     InlineData(Blob),
     FunctionCall(FunctionCall),
-    FunctionRresponse(FunctionResponse),
+    FunctionResponse(FunctionResponse),
     FileData(FileData),
     ExecutableCode(ExecutableCode),
     CodeExecutionResult(CodeExecutionResult),

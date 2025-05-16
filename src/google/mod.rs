@@ -14,6 +14,26 @@ pub enum Error {
 
 const GEMINI_2_0_FLASH_EXP_IMAGE_GEN: &str = "gemini-2.0-flash-exp-image-generation";
 const GEMINI_2_0_FLASH: &str = "gemini-2.0-flash";
+const GEMINI_2_5_FLASH: &str = "gemini-2.5-flash-preview-04-17";
+
+#[derive(Debug, Clone)]
+pub struct Gemini25Flash {
+    name: String,
+}
+
+impl Default for Gemini25Flash {
+    fn default() -> Self {
+        Self {
+            name: GEMINI_2_5_FLASH.to_string(),
+        }
+    }
+}
+
+impl Gemini25Flash {
+    fn name(&self) -> String {
+        self.name.clone()
+    }
+}
 
 #[derive(Debug, Clone)]
 pub struct Gemini20Flash {
@@ -59,6 +79,7 @@ impl Gemini20FlashExpImageGen {
 pub enum GoogleModel {
     Gemini20FlashExpImageGen(Gemini20FlashExpImageGen),
     Gemini20Flash(Gemini20Flash),
+    Gemini25Flash(Gemini25Flash),
 }
 
 impl TryFrom<&str> for GoogleModel {
@@ -66,6 +87,7 @@ impl TryFrom<&str> for GoogleModel {
 
     fn try_from(value: &str) -> Result<Self, Error> {
         match value {
+            GEMINI_2_5_FLASH => Ok(GoogleModel::Gemini25Flash(Gemini25Flash::default())),
             GEMINI_2_0_FLASH => Ok(GoogleModel::Gemini20Flash(Gemini20Flash::default())),
             GEMINI_2_0_FLASH_EXP_IMAGE_GEN => Ok(GoogleModel::Gemini20FlashExpImageGen(
                 Gemini20FlashExpImageGen::default(),
@@ -88,6 +110,7 @@ impl GoogleModel {
         match self {
             GoogleModel::Gemini20FlashExpImageGen(g) => g.name(),
             GoogleModel::Gemini20Flash(g) => g.name(),
+            GoogleModel::Gemini25Flash(g) => g.name(),
         }
     }
 }

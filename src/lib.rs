@@ -45,15 +45,9 @@ mod test {
         let response = client
             .send_text("I'm new to AI, so introduce yourself.")
             .await?;
-        println!(
-            "{}",
-            response.extract_text().expect("Expected text output.")
-        );
+        println!("{}", response.text().expect("Expected text output."));
         let response = client.send_text("Hello.").await?;
-        println!(
-            "{}",
-            response.extract_text().expect("Expected text output.")
-        );
+        println!("{}", response.text().expect("Expected text output."));
         Ok(())
     }
 
@@ -63,9 +57,9 @@ mod test {
         let response = client
             .send_text("Generate a thumbnail sized picture of a capybara.")
             .await?;
-        println!("{:?}", response.extract_images());
+        println!("{:?}", response.images());
         response
-            .extract_images()
+            .images()
             .first()
             .expect("Expected image output(s).");
         Ok(())
@@ -77,28 +71,19 @@ mod test {
         let response = client
             .send_text("Your role is an artists that upgrades logos.")
             .await?;
-        println!(
-            "{:?}",
-            response.extract_text().expect("Expected text result.")
-        );
+        println!("{:?}", response.text().expect("Expected text result."));
         let pic = Path::new(TUX_IMAGE_PATH);
         let response = client.send_image(Some("Here is an image of the linux mascot, tux.  Add the words linux to the background".to_string()), &pic).await?;
-        println!("{:?}", response.extract_text());
+        println!("{:?}", response.text());
         println!(
             "{:?}",
-            response
-                .extract_images()
-                .first()
-                .expect("Expected image output(s)")
+            response.images().first().expect("Expected image output(s)")
         );
 
         let response = client
             .send_text("What type of animal is in the image you sent?")
             .await?;
-        println!(
-            "{:?}",
-            response.extract_text().expect("Expected text result.")
-        );
+        println!("{:?}", response.text().expect("Expected text result."));
         Ok(())
     }
 }
