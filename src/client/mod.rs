@@ -96,7 +96,7 @@ impl Client {
     }
 
     /// Mutates the client by setting sane default configurations based on the model.
-    pub async fn with_defaults(&mut self) -> Self {
+    pub fn with_defaults(&mut self) -> Self {
         let safety_settings = all::<HarmCategory>()
             .collect::<Vec<_>>()
             .into_iter()
@@ -124,7 +124,7 @@ impl Client {
     }
 
     /// Mutate the client by setting the specified safety settings.
-    pub async fn with_safety(&mut self, safety_settings: &[SafetySettings]) -> Self {
+    pub fn with_safety(&mut self, safety_settings: &[SafetySettings]) -> Self {
         self.request.safety_settings = safety_settings.to_vec();
 
         self.to_owned()
@@ -133,7 +133,7 @@ impl Client {
     /// Mutate the client by setting the specified system instructions.  Some models do
     /// not support system instructions, so in these cases we front-load the system instructions
     /// as user text content.
-    pub fn with_instruction(&mut self, system_instruction: &str) -> &mut Self {
+    pub fn with_instructions(&mut self, system_instruction: &str) -> &mut Self {
         match self.model {
             GoogleModel::Gemini20FlashExpImageGen(_) => {
                 // The 2.0 flash experimentation image gen model does not support system instructions
