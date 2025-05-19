@@ -158,6 +158,18 @@ impl Client {
         self
     }
 
+    pub fn with_options(&mut self, options: &GenerationConfig) -> &mut Self {
+        let options = match &self.model {
+            GoogleModel::Gemini20FlashExpImageGen(_) => options.clone(),
+            GoogleModel::Gemini20Flash(_) | GoogleModel::Gemini25Flash(_) => GenerationConfig {
+                response_modalities: vec![Modality::Text],
+                ..options.clone()
+            },
+        };
+        self.request.generation_config = Some(options.clone());
+        self
+    }
+
     /// Since we're dealing with streams it is possible (?) for the stream to contain
     /// a mixture of successful responses and errors.  For simplicity we bail on error
     /// and return just the error, while we reconsolidate all successful responses.
