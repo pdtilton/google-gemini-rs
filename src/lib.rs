@@ -36,7 +36,7 @@ mod test {
         let key = env::var(GEMINI_API_ENV_KEY)?;
         let model = env::var(GEMINI_MODEL_ENV_KEY)?;
 
-        Ok(Client::new(&model.try_into()?, &key).with_defaults().await)
+        Ok(Client::new(&model.try_into()?, &key).with_defaults())
     }
 
     #[tokio::test]
@@ -71,10 +71,14 @@ mod test {
         let response = client
             .send_text("Your role is an artists that upgrades logos.")
             .await?;
+
         println!("{:?}", response.text().expect("Expected text result."));
+
         let pic = Path::new(TUX_IMAGE_PATH);
         let response = client.send_image(Some("Here is an image of the linux mascot, tux.  Add the words linux to the background".to_string()), &pic).await?;
-        println!("{:?}", response.text());
+
+        println!("Response text: {:?}", response.text());
+
         println!(
             "{:?}",
             response.images().first().expect("Expected image output(s)")
@@ -83,7 +87,13 @@ mod test {
         let response = client
             .send_text("What type of animal is in the image you sent?")
             .await?;
-        println!("{:?}", response.text().expect("Expected text result."));
+
+        let text = response.text().expect("Expected text result.");
+
+        println!("Response check text: {}", text);
+
+        assert!(text.contains("penguin"));
+
         Ok(())
     }
 }

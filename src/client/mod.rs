@@ -43,6 +43,12 @@ pub struct Client {
 pub struct Responses(Vec<ContentResponse>);
 
 impl Responses {
+    pub fn inner(&self) -> &[ContentResponse] {
+        &self.0
+    }
+}
+
+impl Responses {
     /// Squash multiple text responses into a single string.
     pub fn text(&self) -> Option<String> {
         let mut text = String::new();
@@ -96,7 +102,7 @@ impl Client {
     }
 
     /// Mutates the client by setting sane default configurations based on the model.
-    pub async fn with_defaults(&mut self) -> Self {
+    pub fn with_defaults(&mut self) -> Self {
         let safety_settings = all::<HarmCategory>()
             .collect::<Vec<_>>()
             .into_iter()
@@ -124,7 +130,7 @@ impl Client {
     }
 
     /// Mutate the client by setting the specified safety settings.
-    pub async fn with_safety(&mut self, safety_settings: &[SafetySettings]) -> Self {
+    pub fn with_safety(&mut self, safety_settings: &[SafetySettings]) -> Self {
         self.request.safety_settings = safety_settings.to_vec();
 
         self.to_owned()
@@ -133,7 +139,7 @@ impl Client {
     /// Mutate the client by setting the specified system instructions.  Some models do
     /// not support system instructions, so in these cases we front-load the system instructions
     /// as user text content.
-    pub fn with_instruction(&mut self, system_instruction: &str) -> &mut Self {
+    pub fn with_instructions(&mut self, system_instruction: &str) -> &mut Self {
         match self.model {
             GoogleModel::Gemini20FlashExpImageGen(_) => {
                 // The 2.0 flash experimentation image gen model does not support system instructions
@@ -155,6 +161,18 @@ impl Client {
             }
         }
 
+        self
+    }
+
+    pub fn with_options(&mut self, options: &GenerationConfig) -> &mut Self {
+        let options = match &self.model {
+            GoogleModel::Gemini20FlashExpImageGen(_) => options.clone(),
+            GoogleModel::Gemini20Flash(_) | GoogleModel::Gemini25Flash(_) => GenerationConfig {
+                response_modalities: vec![Modality::Text],
+                ..options.clone()
+            },
+        };
+        self.request.generation_config = Some(options.clone());
         self
     }
 
