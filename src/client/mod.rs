@@ -190,8 +190,8 @@ impl Client {
                     if !candidate.content.parts.is_empty() {
                         self.request.contents.push(candidate.content.clone());
                     }
-                    success.push(response.clone());
                 }
+                success.push(response.clone());
             }
         }
 
