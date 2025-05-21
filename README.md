@@ -3,6 +3,9 @@ A unofficial simple Rust wrapper around Google's Gemini API.
 Provides statically typed request and response objects as well as an easy to use
 client.
 
+This is a work-in-progress as we become more familiar with the Google Gemini API, so
+expect major changes between minor versions.  At 0.5.0 we will have stable APIs.
+
 ### API Key
 
 You may use a `.env` file for loading your Gemini API key and model using:

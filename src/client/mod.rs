@@ -43,6 +43,12 @@ pub struct Client {
 pub struct Responses(Vec<ContentResponse>);
 
 impl Responses {
+    pub fn inner(&self) -> &[ContentResponse] {
+        &self.0
+    }
+}
+
+impl Responses {
     /// Squash multiple text responses into a single string.
     pub fn text(&self) -> Option<String> {
         let mut text = String::new();
