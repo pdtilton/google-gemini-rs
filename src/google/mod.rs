@@ -57,7 +57,7 @@ impl Gemini20Flash {
     }
 }
 
-#[derive(Debug, Clone, Hash, Serialize, Deserialize, Eq, PartialEq)]
+#[derive(Debug, Clone, Hash, Eq, PartialEq)]
 pub struct Gemini20FlashExpImageGen {
     name: String,
 }
@@ -78,8 +78,7 @@ impl Gemini20FlashExpImageGen {
 
 /// Supported Google AI models.  Some models have different capabilities than others, so this
 /// enum may be used to branch the different capabilities.
-#[derive(Debug, Clone, Hash, Serialize, Deserialize, Eq, PartialEq)]
-#[serde(rename_all = "kebab-case")]
+#[derive(Debug, Clone, Hash, Eq, PartialEq)]
 pub enum GoogleModel {
     Gemini20FlashExpImageGen(Gemini20FlashExpImageGen),
     Gemini20Flash(Gemini20Flash),
