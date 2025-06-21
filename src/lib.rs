@@ -1,6 +1,8 @@
 pub mod client;
 pub mod google;
 
+pub use rust_mcp_sdk;
+
 #[cfg(test)]
 mod test {
     use dotenv::dotenv;
