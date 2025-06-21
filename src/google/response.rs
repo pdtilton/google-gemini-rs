@@ -177,7 +177,7 @@ pub struct UrlRetrievalMetadata {
     pub url_retrieval_contexts: Vec<UrlRetrievalContext>,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct Candidate {
     pub content: Content,
@@ -255,7 +255,7 @@ pub struct UsageMetadata {
     pub tool_use_prompt_tokens_details: Vec<ModalityTokenCount>,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct ContentResponse {
     #[serde(default)]
