@@ -33,10 +33,11 @@ mod test {
 
     async fn client() -> Result<Client, Error> {
         dotenv()?;
+
         let key = env::var(GEMINI_API_ENV_KEY)?;
         let model = env::var(GEMINI_MODEL_ENV_KEY)?;
 
-        Ok(Client::new(&model.try_into()?, &key).with_defaults())
+        Ok(Client::new(&model.try_into()?, &key).await?.with_defaults())
     }
 
     #[tokio::test]

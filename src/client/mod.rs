@@ -1,13 +1,15 @@
-use std::path::Path;
+use std::{path::Path, sync::Arc};
 
 use base64::prelude::*;
 use enum_iterator::all;
 use file_format::FileFormat;
+use rust_mcp_sdk::McpClient;
+use serde_json::Value;
 use thiserror::Error;
 
 use crate::google::{
     GoogleModel,
-    common::{Blob, Content, HarmCategory, Modality, Part, Role},
+    common::{Blob, Content, FunctionCall, HarmCategory, Modality, Part, Role},
     request::{GenerateContentRequest, GenerationConfig, HarmBlockThreshold, SafetySettings},
     response::ContentResponse,
 };
@@ -25,16 +27,23 @@ pub enum Error {
     Request(String),
     #[error(transparent)]
     Io(#[from] std::io::Error),
+    #[error(transparent)]
+    MpcSdk(#[from] rust_mcp_sdk::error::McpSdkError),
+    #[error("{0}")]
+    UnsupportedConfig(String),
+    #[error("{0}")]
+    NotFound(String),
 }
 
 /// Wrapper struct which stores the HTTP Reqwest client and the request history.  The `send`
 /// methods are used to send text and images without having to manage the history manually.
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct Client {
     client: reqwest::Client,
     model: GoogleModel,
     key: String,
     request: GenerateContentRequest,
+    mcps: Vec<Arc<rust_mcp_sdk::mcp_client::ClientRuntime>>,
 }
 
 /// The model may return more than one output since we use streaming.  This wrapper
@@ -84,8 +93,8 @@ impl Responses {
 impl Client {
     /// Creates a new instance of a Reqwest client.  The client is setup to utilize the given
     /// Google Gemini model.
-    pub fn new(model: &GoogleModel, key: &str) -> Self {
-        Client {
+    pub async fn new(model: &GoogleModel, key: &str) -> Result<Self, Error> {
+        Ok(Client {
             client: reqwest::Client::new(),
             model: model.clone(),
             key: key.to_string(),
@@ -98,7 +107,8 @@ impl Client {
                 generation_config: None,
                 cached_content: None,
             },
-        }
+            mcps: vec![],
+        })
     }
 
     /// Mutates the client by setting sane default configurations based on the model.
@@ -127,6 +137,30 @@ impl Client {
         self.request.generation_config = Some(generation_config);
 
         self.to_owned()
+    }
+
+    pub async fn with_tools_client(
+        &mut self,
+        mcps: Vec<Arc<rust_mcp_sdk::mcp_client::ClientRuntime>>,
+    ) -> Result<Self, Error> {
+        let mut tools = Vec::new();
+
+        if matches!(self.model, GoogleModel::Gemini20FlashExpImageGen(_)) {
+            return Err(Error::UnsupportedConfig(format!(
+                "Model {} does not support tool calls",
+                self.model
+            )));
+        }
+
+        self.mcps = mcps;
+
+        for client in &self.mcps {
+            tools.push(client.list_tools(None).await?.tools.into())
+        }
+
+        self.request.tools = tools;
+
+        Ok(self.to_owned())
     }
 
     /// Mutate the client by setting the specified safety settings.
@@ -179,7 +213,10 @@ impl Client {
     /// Since we're dealing with streams it is possible (?) for the stream to contain
     /// a mixture of successful responses and errors.  For simplicity we bail on error
     /// and return just the error, while we reconsolidate all successful responses.
-    fn merge_response(&mut self, responses: &[ContentResponse]) -> Result<Responses, Error> {
+    fn merge_response(
+        &mut self,
+        responses: &[ContentResponse],
+    ) -> Result<Vec<ContentResponse>, Error> {
         let mut success = Vec::new();
 
         for response in responses {
@@ -195,22 +232,144 @@ impl Client {
             }
         }
 
-        Ok(Responses(success))
+        Ok(success)
+    }
+
+    async fn tool_call(&self, function_call: &FunctionCall) -> Result<Vec<Part>, Error> {
+        let mut parts = vec![];
+
+        let index = self
+            .request
+            .tools
+            .iter()
+            .enumerate()
+            .find(|(_i, t)| {
+                t.function_declarations
+                    .iter()
+                    .any(|f| f.name == function_call.name)
+            })
+            .ok_or_else(|| Error::NotFound(function_call.name.clone()))?
+            .0;
+
+        let t = self.mcps.get(index).ok_or_else(|| {
+            Error::NotFound(format!("Tool for function call {}", function_call.name))
+        })?;
+
+        let response = t
+            .call_tool(rust_mcp_sdk::schema::CallToolRequestParams {
+                arguments: function_call.args.clone(),
+                name: function_call.name.clone(),
+            })
+            .await?;
+
+        for content in &response.content {
+            let part = match content {
+                rust_mcp_sdk::schema::CallToolResultContentItem::TextContent(text_content) => {
+                    Part::FunctionResponse(crate::google::common::FunctionResponse {
+                        id: None,
+                        name: function_call.name.clone(),
+                        response: serde_json::from_str::<serde_json::Map<String, Value>>(
+                            &serde_json::to_string(text_content)?,
+                        )?,
+                    })
+                }
+                rust_mcp_sdk::schema::CallToolResultContentItem::ImageContent(image_content) => {
+                    Part::FunctionResponse(crate::google::common::FunctionResponse {
+                        id: None,
+                        name: function_call.name.clone(),
+                        response: serde_json::from_str::<serde_json::Map<String, Value>>(
+                            &serde_json::to_string(image_content)?,
+                        )?,
+                    })
+                }
+                rust_mcp_sdk::schema::CallToolResultContentItem::AudioContent(audio_content) => {
+                    Part::FunctionResponse(crate::google::common::FunctionResponse {
+                        id: None,
+                        name: function_call.name.clone(),
+                        response: serde_json::from_str::<serde_json::Map<String, Value>>(
+                            &serde_json::to_string(audio_content)?,
+                        )?,
+                    })
+                }
+                rust_mcp_sdk::schema::CallToolResultContentItem::EmbeddedResource(
+                    embedded_resource,
+                ) => Part::FunctionResponse(crate::google::common::FunctionResponse {
+                    id: None,
+                    name: function_call.name.clone(),
+                    response: serde_json::from_str::<serde_json::Map<String, Value>>(
+                        &serde_json::to_string(embedded_resource)?,
+                    )?,
+                }),
+            };
+
+            parts.push(part);
+        }
+
+        Ok(parts)
+    }
+
+    /// Processes tool requests from the model.  We need to push all results onto the content
+    /// request stack for the history.
+    async fn process_tools(&mut self, in_responses: &[ContentResponse]) -> Result<bool, Error> {
+        let mut fn_calls = Vec::new();
+
+        for in_response in in_responses {
+            for in_candidate in &in_response.candidates {
+                for in_part in &in_candidate.content.parts {
+                    match in_part {
+                        Part::Thought(_)
+                        | Part::Text(_)
+                        | Part::InlineData(_)
+                        | Part::FileData(_)
+                        | Part::ExecutableCode(_)
+                        | Part::CodeExecutionResult(_)
+                        | Part::FunctionResponse(_) => {}
+                        Part::FunctionCall(function_call) => {
+                            fn_calls.push(function_call.clone());
+                        }
+                    }
+                }
+            }
+        }
+
+        if !fn_calls.is_empty() {
+            for function_call in &fn_calls {
+                let parts = self.tool_call(function_call).await?;
+
+                self.request.contents.push(Content {
+                    parts,
+                    role: Role::User,
+                });
+            }
+            Ok(true)
+        } else {
+            Ok(false)
+        }
+    }
+
+    async fn do_post(&mut self) -> Result<Vec<ContentResponse>, Error> {
+        let request = self
+            .client
+            .post(self.url())
+            .header("Content-Type", "application/json")
+            .query(&[("key", &self.key)])
+            .json(&self.request);
+
+        let responses = request.send().await?.json::<Vec<ContentResponse>>().await?;
+
+        self.merge_response(&responses)
     }
 
     async fn post(&mut self) -> Result<Responses, Error> {
-        self.merge_response(
-            &self
-                .client
-                .post(self.url())
-                .header("Content-Type", "application/json")
-                .query(&[("key", &self.key)])
-                .json(&self.request)
-                .send()
-                .await?
-                .json::<Vec<ContentResponse>>()
-                .await?,
-        )
+        let mut responses = self.do_post().await?;
+
+        // Process all functions that the model maay be calling and feed the results
+        // back in.
+        while self.process_tools(&responses).await? {
+            responses = self.do_post().await?;
+        }
+
+        Ok(Responses(responses))
     }
 
     /// Send the given text to the model.  Returns the responses or an error

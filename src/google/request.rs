@@ -2,25 +2,46 @@
 
 use std::collections::HashMap;
 
+use rust_mcp_sdk::{error::McpSdkError, schema::ToolInputSchema};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use thiserror::Error;
 
 use super::common::{Content, HarmCategory, Modality};
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Debug, Error)]
+pub enum Error {
+    #[error(transparent)]
+    McpSdk(#[from] McpSdkError),
+    #[error("{0}")]
+    NotFound(String),
+    #[error(transparent)]
+    Serde(#[from] serde_json::Error),
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, Default)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum Type {
+    #[serde(alias = "typeunspecified")]
+    #[default]
     TypeUnspecified,
+    #[serde(alias = "string")]
     String,
+    #[serde(alias = "number")]
     Number,
+    #[serde(alias = "integer")]
     Integer,
+    #[serde(alias = "boolean")]
     Boolean,
+    #[serde(alias = "array")]
     Array,
+    #[serde(alias = "object")]
     Object,
+    #[serde(alias = "null")]
     Null,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct Schema {
     pub r#type: Type,
@@ -68,6 +89,71 @@ pub struct Schema {
     pub maximum: Option<f32>,
 }
 
+impl Schema {
+    fn from_mcp(tp: &Type, value: &mut serde_json::Map<String, Value>) -> Self {
+        let properties = value
+            .into_iter()
+            .map(|(prop, schema)| {
+                if let Ok(mut schema) =
+                    serde_json::from_value::<serde_json::Map<String, Value>>(schema.clone())
+                {
+                    let sch = if let Some(tp) = schema.remove("type") {
+                        if let Ok(tp) = serde_json::from_value::<Type>(tp) {
+                            Schema::from_mcp(&tp, &mut schema)
+                        } else {
+                            Schema::default()
+                        }
+                    } else {
+                        Schema::default()
+                    };
+                    (prop.clone(), sch)
+                } else {
+                    (prop.clone(), Schema::default())
+                }
+            })
+            .collect();
+
+        Schema {
+            r#type: tp.clone(),
+            properties,
+            ..Default::default()
+        }
+    }
+}
+
+impl TryFrom<ToolInputSchema> for Schema {
+    type Error = Error;
+
+    fn try_from(value: ToolInputSchema) -> Result<Self, Error> {
+        let r#type = serde_json::from_str::<Type>(value.type_().as_str())?;
+
+        let properties = value
+            .properties
+            .unwrap_or_default()
+            .into_iter()
+            .map(|(prop, mut schema)| {
+                let sch = if let Some(tp) = schema.remove("type") {
+                    if let Ok(tp) = serde_json::from_value::<Type>(tp) {
+                        Schema::from_mcp(&tp, &mut schema)
+                    } else {
+                        Schema::default()
+                    }
+                } else {
+                    Schema::default()
+                };
+
+                (prop, sch)
+            })
+            .collect();
+
+        Ok(Schema {
+            r#type,
+            properties,
+            ..Default::default()
+        })
+    }
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct FunctionDeclaration {
@@ -77,6 +163,32 @@ pub struct FunctionDeclaration {
     pub parameters: Option<Schema>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub response: Option<Schema>,
+}
+
+pub fn map_fn_name(index: usize, name: &str) -> String {
+    format!("{index}_{name}")
+}
+
+pub fn unmap_fn_name(name: &str) -> Result<String, Error> {
+    Ok(name
+        .split_once('_')
+        .ok_or_else(|| Error::NotFound("Function name: {name}".to_string()))?
+        .1
+        .to_string())
+}
+
+impl From<&rust_mcp_sdk::schema::Tool> for FunctionDeclaration {
+    fn from(value: &rust_mcp_sdk::schema::Tool) -> Self {
+        Self {
+            name: value.name.clone(),
+            description: value
+                .description
+                .clone()
+                .unwrap_or_else(|| "None".to_string()),
+            parameters: value.input_schema.clone().try_into().ok(),
+            response: None,
+        }
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -101,6 +213,10 @@ pub struct GoogleSearchRetrieval {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct UrlContext {}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Tool {
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub function_declarations: Vec<FunctionDeclaration>,
@@ -110,6 +226,20 @@ pub struct Tool {
     pub code_execution: Option<Value>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub google_search: Option<Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub url_context: Option<UrlContext>,
+}
+
+impl From<Vec<rust_mcp_sdk::schema::Tool>> for Tool {
+    fn from(value: Vec<rust_mcp_sdk::schema::Tool>) -> Self {
+        Self {
+            function_declarations: value.iter().map(|t| t.into()).collect(),
+            google_search_retrieval: None,
+            code_execution: None,
+            google_search: None,
+            url_context: None,
+        }
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

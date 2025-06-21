@@ -51,17 +51,19 @@ pub struct FileData {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct FunctionCall {
-    pub id: String,
+    #[serde(default)]
+    pub id: Option<String>,
     pub name: String,
-    pub args: Value,
+    #[serde(default)]
+    pub args: Option<serde_json::Map<String, Value>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct FunctionResponse {
-    pub id: String,
+    pub id: Option<String>,
     pub name: String,
-    pub response: Value,
+    pub response: serde_json::Map<String, Value>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -107,14 +109,15 @@ pub enum Part {
     CodeExecutionResult(CodeExecutionResult),
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum Role {
+    #[default]
     User,
     Model,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct Content {
     #[serde(default)]
