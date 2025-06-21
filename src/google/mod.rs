@@ -1,5 +1,8 @@
 //! Wrapper types for supported Google AI Models
 
+use std::fmt::Display;
+
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 pub mod common;
@@ -16,7 +19,7 @@ const GEMINI_2_0_FLASH_EXP_IMAGE_GEN: &str = "gemini-2.0-flash-exp-image-generat
 const GEMINI_2_0_FLASH: &str = "gemini-2.0-flash";
 const GEMINI_2_5_FLASH: &str = "gemini-2.5-flash-preview-04-17";
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Hash, Serialize, Deserialize, Eq, PartialEq)]
 pub struct Gemini25Flash {
     name: String,
 }
@@ -35,7 +38,7 @@ impl Gemini25Flash {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Hash, Serialize, Deserialize, Eq, PartialEq)]
 pub struct Gemini20Flash {
     name: String,
 }
@@ -54,7 +57,7 @@ impl Gemini20Flash {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Hash, Eq, PartialEq)]
 pub struct Gemini20FlashExpImageGen {
     name: String,
 }
@@ -75,7 +78,7 @@ impl Gemini20FlashExpImageGen {
 
 /// Supported Google AI models.  Some models have different capabilities than others, so this
 /// enum may be used to branch the different capabilities.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Hash, Eq, PartialEq)]
 pub enum GoogleModel {
     Gemini20FlashExpImageGen(Gemini20FlashExpImageGen),
     Gemini20Flash(Gemini20Flash),
@@ -102,6 +105,12 @@ impl TryFrom<String> for GoogleModel {
 
     fn try_from(value: String) -> Result<Self, Self::Error> {
         value.as_str().try_into()
+    }
+}
+
+impl Display for GoogleModel {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.name())
     }
 }
 
