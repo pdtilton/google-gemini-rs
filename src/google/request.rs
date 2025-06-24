@@ -4,7 +4,7 @@ use std::collections::HashMap;
 
 use rust_mcp_sdk::{error::McpSdkError, schema::ToolInputSchema};
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
+use serde_json::{Value, json};
 use thiserror::Error;
 
 use super::common::{Content, HarmCategory, Modality};
@@ -45,112 +45,57 @@ pub enum Type {
 #[serde(rename_all = "camelCase")]
 pub struct Schema {
     pub r#type: Type,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub format: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub title: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub nullable: Option<bool>,
-    #[serde(skip_serializing_if = "Vec::is_empty")]
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub r#enum: Vec<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub max_items: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub min_items: Option<String>,
-    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    #[serde(default, skip_serializing_if = "HashMap::is_empty")]
     pub properties: HashMap<String, Schema>,
-    #[serde(skip_serializing_if = "Vec::is_empty")]
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub required: Vec<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub min_properties: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub max_properties: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub min_length: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub max_length: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub pattern: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub example: Option<Value>,
-    #[serde(skip_serializing_if = "Vec::is_empty")]
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub any_of: Vec<Schema>,
-    #[serde(skip_serializing_if = "Vec::is_empty")]
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub property_ordering: Vec<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub default: Option<Value>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub items: Option<Box<Schema>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub minimum: Option<f32>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub maximum: Option<f32>,
-}
-
-impl Schema {
-    fn from_mcp(tp: &Type, value: &mut serde_json::Map<String, Value>) -> Self {
-        let properties = value
-            .into_iter()
-            .map(|(prop, schema)| {
-                if let Ok(mut schema) =
-                    serde_json::from_value::<serde_json::Map<String, Value>>(schema.clone())
-                {
-                    let sch = if let Some(tp) = schema.remove("type") {
-                        if let Ok(tp) = serde_json::from_value::<Type>(tp) {
-                            Schema::from_mcp(&tp, &mut schema)
-                        } else {
-                            Schema::default()
-                        }
-                    } else {
-                        Schema::default()
-                    };
-                    (prop.clone(), sch)
-                } else {
-                    (prop.clone(), Schema::default())
-                }
-            })
-            .collect();
-
-        Schema {
-            r#type: tp.clone(),
-            properties,
-            ..Default::default()
-        }
-    }
 }
 
 impl TryFrom<ToolInputSchema> for Schema {
     type Error = Error;
 
     fn try_from(value: ToolInputSchema) -> Result<Self, Error> {
-        let r#type = serde_json::from_str::<Type>(value.type_().as_str())?;
-
-        let properties = value
-            .properties
-            .unwrap_or_default()
-            .into_iter()
-            .map(|(prop, mut schema)| {
-                let sch = if let Some(tp) = schema.remove("type") {
-                    if let Ok(tp) = serde_json::from_value::<Type>(tp) {
-                        Schema::from_mcp(&tp, &mut schema)
-                    } else {
-                        Schema::default()
-                    }
-                } else {
-                    Schema::default()
-                };
-
-                (prop, sch)
-            })
-            .collect();
-
-        Ok(Schema {
-            r#type,
-            properties,
-            ..Default::default()
-        })
+        // Behold the power of serde: convert the MCP tool schema to the
+        // Gemini tool schema.
+        Ok(serde_json::from_value::<Schema>(json!(value))?)
     }
 }
 

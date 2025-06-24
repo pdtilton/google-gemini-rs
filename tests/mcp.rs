@@ -6,10 +6,6 @@ use google_gemini_rs::{
     client::{self, Client},
     google,
 };
-use rust_mcp_sdk::schema::{
-    CallToolRequest, CallToolResult, ListToolsRequest, ListToolsResult, RpcError,
-    schema_utils::CallToolError,
-};
 use rust_mcp_sdk::{
     ClientSseTransport, ClientSseTransportOptions, McpClient, McpServer, TransportError,
     error::McpSdkError,
@@ -20,6 +16,13 @@ use rust_mcp_sdk::{
         ClientCapabilities, Implementation, InitializeRequestParams, InitializeResult,
         LATEST_PROTOCOL_VERSION, ServerCapabilities, ServerCapabilitiesTools,
     },
+};
+use rust_mcp_sdk::{
+    schema::{
+        CallToolRequest, CallToolResult, ListToolsRequest, ListToolsResult, RpcError,
+        schema_utils::CallToolError,
+    },
+    tool_box,
 };
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -64,13 +67,73 @@ impl ClientHandler for WeatherClient {}
 #[derive(Debug, Deserialize, Serialize, JsonSchema)]
 pub struct SayHelloTool {}
 
+impl SayHelloTool {
+    pub fn call_tool(&self) -> Result<CallToolResult, CallToolError> {
+        let message = "Hello World\n".to_string();
+        Ok(CallToolResult::text_content(message, None))
+    }
+}
+
 #[mcp_tool(name = "say_hidden", description = "Prints a hidden message")]
 #[derive(Debug, Deserialize, Serialize, JsonSchema)]
 pub struct SayHiddenTool {}
 
-#[mcp_tool(name = "say_secrets", description = "Prints some secret messages")]
+impl SayHiddenTool {
+    pub fn call_tool(&self) -> Result<CallToolResult, CallToolError> {
+        let message = format!("{}", SECRET);
+        Ok(CallToolResult::text_content(message, None))
+    }
+}
+
+#[mcp_tool(
+    name = "say_secrets",
+    description = "Prints some secret messages with the appended a sentinel value, so be sure to provide the sentinel."
+)]
 #[derive(Debug, Deserialize, Serialize, JsonSchema)]
-pub struct SaySecretsTool {}
+pub struct SaySecretsTool {
+    /// The sentinel value provided by the caller.
+    sentinel: String,
+}
+
+impl SaySecretsTool {
+    pub fn call_tool(&self) -> Result<CallToolResult, CallToolError> {
+        let message = format!("{}_{}", SECRET2, self.sentinel);
+        Ok(CallToolResult::text_content(message, None))
+    }
+}
+
+#[derive(Debug, Deserialize, Serialize, JsonSchema)]
+pub struct NestedIndex {
+    index: u32,
+}
+
+#[mcp_tool(
+    name = "say_complex_secrets",
+    description = "Prints some secret messages with the appended a sentinel value and index."
+)]
+#[derive(Debug, Deserialize, Serialize, JsonSchema)]
+pub struct SaySecretsComplex {
+    /// The sentinel value provided by the caller.
+    sentinel: String,
+    index: NestedIndex,
+}
+
+impl SaySecretsComplex {
+    pub fn call_tool(&self) -> Result<CallToolResult, CallToolError> {
+        let message = format!("{}_{}_{}", SECRET3, self.sentinel, self.index.index);
+        Ok(CallToolResult::text_content(message, None))
+    }
+}
+
+tool_box!(
+    AllTools,
+    [
+        SayHelloTool,
+        SayHiddenTool,
+        SaySecretsTool,
+        SaySecretsComplex
+    ]
+);
 
 // STEP 2: Implement ServerHandler trait for a custom handler
 // For this example , we only need handle_list_tools_request() and handle_call_tool_request() methods.
@@ -86,11 +149,7 @@ impl ServerHandler for MyServerHandler {
         runtime: &dyn McpServer,
     ) -> Result<ListToolsResult, RpcError> {
         Ok(ListToolsResult {
-            tools: vec![
-                SayHelloTool::tool(),
-                SayHiddenTool::tool(),
-                SaySecretsTool::tool(),
-            ],
+            tools: AllTools::tools(),
             meta: None,
             next_cursor: None,
         })
@@ -102,20 +161,14 @@ impl ServerHandler for MyServerHandler {
         request: CallToolRequest,
         runtime: &dyn McpServer,
     ) -> Result<CallToolResult, CallToolError> {
-        if request.tool_name() == SayHelloTool::tool_name() {
-            Ok(CallToolResult::text_content(
-                "Hello World!".to_string(),
-                None,
-            ))
-        } else if request.tool_name() == SayHiddenTool::tool_name() {
-            Ok(CallToolResult::text_content(SECRET.to_string(), None))
-        } else if request.tool_name() == SaySecretsTool::tool_name() {
-            Ok(CallToolResult::text_content(
-                [SECRET, SECRET2, SECRET3].join(","),
-                None,
-            ))
-        } else {
-            Err(CallToolError::unknown_tool(request.tool_name().to_string()))
+        let tool_params: AllTools =
+            AllTools::try_from(request.params).map_err(CallToolError::new)?;
+
+        match tool_params {
+            AllTools::SayHelloTool(say_hello_tool) => say_hello_tool.call_tool(),
+            AllTools::SayHiddenTool(say_hidden_tool) => say_hidden_tool.call_tool(),
+            AllTools::SaySecretsTool(say_secrets_tool) => say_secrets_tool.call_tool(),
+            AllTools::SaySecretsComplex(say_secrets_complex) => say_secrets_complex.call_tool(),
         }
     }
 }
@@ -227,11 +280,28 @@ async fn test_mcp() -> Result<(), Error> {
     assert!(response.text().unwrap().contains(SECRET));
 
     let response = g_client
-        .send_text("Can you find the second secret word?")
+        .send_text("Can you find the second secret word? Use the sentinel value \"foobarbaz\".")
         .await?;
 
     println!("response: {:?}", response.text());
-    assert!(response.text().unwrap().contains(SECRET2));
+    assert!(
+        response
+            .text()
+            .unwrap()
+            .contains(&format!("{}_foobarbaz", SECRET2))
+    );
+
+    let response = g_client
+        .send_text("Can you find the second secret word? Use the sentinel value \"foobarbaz\" and index 3.")
+        .await?;
+
+    println!("response: {:?}", response.text());
+    assert!(
+        response
+            .text()
+            .unwrap()
+            .contains(&format!("{}_foobarbaz_3", SECRET3))
+    );
 
     weather_client.shut_down().await?;
     server.graceful_shutdown(Some(Duration::from_secs(30)));
