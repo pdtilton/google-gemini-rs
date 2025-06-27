@@ -23,8 +23,8 @@ pub enum Error {
     SerdeJson(#[from] serde_json::Error),
     #[error(transparent)]
     Reqwest(#[from] reqwest::Error),
-    #[error("{0}")]
-    Request(String),
+    #[error("Agent Request")]
+    Request { code: i32, message: String },
     #[error(transparent)]
     Io(#[from] std::io::Error),
     #[error(transparent)]
@@ -33,6 +33,23 @@ pub enum Error {
     UnsupportedConfig(String),
     #[error("{0}")]
     NotFound(String),
+}
+
+impl From<&Value> for Error {
+    fn from(value: &Value) -> Self {
+        let mut code = 0;
+        let mut message = String::new();
+        if let Ok(map) = serde_json::from_value::<serde_json::Map<String, Value>>(value.clone()) {
+            if let Some(cd) = map.get("code") {
+                code = serde_json::from_value::<i32>(cd.clone()).unwrap_or_else(|_| 0);
+            }
+            if let Some(msg) = map.get("message") {
+                message = serde_json::from_value::<String>(msg.clone())
+                    .unwrap_or_else(|_| "Unknown error".to_string());
+            }
+        }
+        Error::Request { code, message }
+    }
 }
 
 /// Wrapper struct which stores the HTTP Reqwest client and the request history.  The `send`
@@ -221,7 +238,8 @@ impl Client {
 
         for response in responses {
             if let Some(error) = &response.error {
-                return Err(Error::Request(serde_json::to_string(error)?));
+                //return Err(Error::Request(serde_json::to_string(error)?));
+                return Err(error.into());
             } else {
                 for candidate in &response.candidates {
                     if !candidate.content.parts.is_empty() {
