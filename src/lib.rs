@@ -51,6 +51,8 @@ mod test {
         println!("{}", response.text().expect("Expected text output."));
         let response = client.send_text("Hello.").await?;
         println!("{}", response.text().expect("Expected text output."));
+        let response = client.send_text("Do you have a name?").await?;
+        println!("{}", response.text().expect("Expected text output."));
         Ok(())
     }
 
