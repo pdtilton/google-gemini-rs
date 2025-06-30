@@ -144,7 +144,7 @@ impl Client {
                 response_modalities: vec![Modality::Text, Modality::Image],
                 ..Default::default()
             },
-            GoogleModel::Gemini20Flash(_) | GoogleModel::Gemini25Flash(_) => GenerationConfig {
+            GoogleModel::Gemini20Flash(_) | GoogleModel::Gemini25Flash(_) | GoogleModel::Gemini25Pro(_) => GenerationConfig {
                 response_modalities: vec![Modality::Text],
                 ..Default::default()
             },
@@ -204,7 +204,7 @@ impl Client {
 
                 self.request.contents = contents;
             }
-            GoogleModel::Gemini20Flash(_) | GoogleModel::Gemini25Flash(_) => {
+            GoogleModel::Gemini20Flash(_) | GoogleModel::Gemini25Flash(_) | GoogleModel::Gemini25Pro(_) => {
                 self.request.system_instruction = Some(Content {
                     role: Role::User,
                     parts: vec![Part::Text(system_instruction.to_string())],
@@ -218,7 +218,7 @@ impl Client {
     pub fn with_options(&mut self, options: &GenerationConfig) -> &mut Self {
         let options = match &self.model {
             GoogleModel::Gemini20FlashExpImageGen(_) => options.clone(),
-            GoogleModel::Gemini20Flash(_) | GoogleModel::Gemini25Flash(_) => GenerationConfig {
+            GoogleModel::Gemini20Flash(_) | GoogleModel::Gemini25Flash(_) | GoogleModel::Gemini25Pro(_) => GenerationConfig {
                 response_modalities: vec![Modality::Text],
                 ..options.clone()
             },
