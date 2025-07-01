@@ -438,6 +438,15 @@ impl Client {
             .await
     }
 
+    pub async fn send_parts(&mut self, parts: &[Part]) -> Result<Responses, Error> {
+        self.request.contents.push(Content {
+            parts: parts.to_vec(),
+            role: Role::User,
+        });
+
+        self.post().await
+    }
+
     /// Send the given image to the model.  This must be a UTF-8 Base64 encoded
     /// string which is required by the Google API.  Optional text may be sent with
     /// the image to create a single consolidated message.  Returns the responses
