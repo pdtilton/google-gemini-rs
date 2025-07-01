@@ -9,7 +9,7 @@ use thiserror::Error;
 
 use crate::google::{
     GoogleModel,
-    common::{Blob, Content, FunctionCall, HarmCategory, Modality, Part, Role},
+    common::{Blob, Content, FileData, FunctionCall, HarmCategory, Modality, Part, Role},
     request::{GenerateContentRequest, GenerationConfig, HarmBlockThreshold, SafetySettings},
     response::ContentResponse,
 };
@@ -41,7 +41,7 @@ impl From<&Value> for Error {
         let mut message = String::new();
         if let Ok(map) = serde_json::from_value::<serde_json::Map<String, Value>>(value.clone()) {
             if let Some(cd) = map.get("code") {
-                code = serde_json::from_value::<i32>(cd.clone()).unwrap_or_else(|_| 0);
+                code = serde_json::from_value::<i32>(cd.clone()).unwrap_or(0);
             }
             if let Some(msg) = map.get("message") {
                 message = serde_json::from_value::<String>(msg.clone())
@@ -144,7 +144,9 @@ impl Client {
                 response_modalities: vec![Modality::Text, Modality::Image],
                 ..Default::default()
             },
-            GoogleModel::Gemini20Flash(_) | GoogleModel::Gemini25Flash(_) | GoogleModel::Gemini25Pro(_) => GenerationConfig {
+            GoogleModel::Gemini20Flash(_)
+            | GoogleModel::Gemini25Flash(_)
+            | GoogleModel::Gemini25Pro(_) => GenerationConfig {
                 response_modalities: vec![Modality::Text],
                 ..Default::default()
             },
@@ -204,7 +206,9 @@ impl Client {
 
                 self.request.contents = contents;
             }
-            GoogleModel::Gemini20Flash(_) | GoogleModel::Gemini25Flash(_) | GoogleModel::Gemini25Pro(_) => {
+            GoogleModel::Gemini20Flash(_)
+            | GoogleModel::Gemini25Flash(_)
+            | GoogleModel::Gemini25Pro(_) => {
                 self.request.system_instruction = Some(Content {
                     role: Role::User,
                     parts: vec![Part::Text(system_instruction.to_string())],
@@ -218,7 +222,9 @@ impl Client {
     pub fn with_options(&mut self, options: &GenerationConfig) -> &mut Self {
         let options = match &self.model {
             GoogleModel::Gemini20FlashExpImageGen(_) => options.clone(),
-            GoogleModel::Gemini20Flash(_) | GoogleModel::Gemini25Flash(_) | GoogleModel::Gemini25Pro(_) => GenerationConfig {
+            GoogleModel::Gemini20Flash(_)
+            | GoogleModel::Gemini25Flash(_)
+            | GoogleModel::Gemini25Pro(_) => GenerationConfig {
                 response_modalities: vec![Modality::Text],
                 ..options.clone()
             },
@@ -401,7 +407,25 @@ impl Client {
         self.post().await
     }
 
-    pub async fn send_image(
+    pub async fn send_image(&mut self, blob: &Blob) -> Result<Responses, Error> {
+        self.request.contents.push(Content {
+            parts: vec![Part::InlineData(blob.clone())],
+            role: Role::User,
+        });
+
+        self.post().await
+    }
+
+    pub async fn send_file_data(&mut self, data: &FileData) -> Result<Responses, Error> {
+        self.request.contents.push(Content {
+            parts: vec![Part::FileData(data.clone())],
+            role: Role::User,
+        });
+
+        self.post().await
+    }
+
+    pub async fn send_image_file(
         &mut self,
         message: Option<String>,
         img: &Path,
