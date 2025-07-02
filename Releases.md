@@ -1,5 +1,9 @@
 Google Gemini Rust
 
+0.3.0
+
+Add methods for sending multiple part messages at once.
+
 0.2.0
 
 Initial support for MPC.

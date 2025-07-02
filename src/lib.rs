@@ -80,7 +80,7 @@ mod test {
         println!("{:?}", response.text().expect("Expected text result."));
 
         let pic = Path::new(TUX_IMAGE_PATH);
-        let response = client.send_image(Some("Here is an image of the linux mascot, tux.  Add the words linux to the background".to_string()), &pic).await?;
+        let response = client.send_image_file(Some("Here is an image of the linux mascot, tux.  Add the words linux to the background".to_string()), &pic).await?;
 
         println!("Response text: {:?}", response.text());
 

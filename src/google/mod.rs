@@ -117,7 +117,7 @@ impl TryFrom<&str> for GoogleModel {
             GEMINI_2_0_FLASH_EXP_IMAGE_GEN => Ok(GoogleModel::Gemini20FlashExpImageGen(
                 Gemini20FlashExpImageGen::default(),
             )),
-            _ => Err(Error::NotFound(format!("No such model: {}", value))),
+            _ => Err(Error::NotFound(format!("No such model: {value}"))),
         }
     }
 }
