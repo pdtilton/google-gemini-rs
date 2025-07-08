@@ -1,5 +1,9 @@
 Google Gemini Rust
 
+0.4.0
+
+Refined instantiation of models by supporting preview suffixes.
+
 0.3.0
 
 Add methods for sending multiple part messages at once.

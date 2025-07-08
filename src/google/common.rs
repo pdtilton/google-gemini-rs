@@ -25,13 +25,14 @@ pub enum HarmProbability {
     High,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum Modality {
     ModalityUnspecified,
     Text,
     Image,
     Audio,
+    Video,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -11,7 +11,7 @@ mod test {
 
     use crate::{
         client::{self, Client},
-        google,
+        google::{self, common::Modality},
     };
 
     const GEMINI_API_ENV_KEY: &str = "GEMINI_API_KEY";
@@ -39,7 +39,9 @@ mod test {
         let key = env::var(GEMINI_API_ENV_KEY)?;
         let model = env::var(GEMINI_MODEL_ENV_KEY)?;
 
-        Ok(Client::new(&model.try_into()?, &key).await?.with_defaults())
+        Ok(Client::new(&model.as_str().try_into()?, &key)
+            .await?
+            .with_defaults())
     }
 
     #[tokio::test]
@@ -59,14 +61,18 @@ mod test {
     #[tokio::test]
     async fn image_query() -> Result<(), Error> {
         let mut client = client().await?;
+
         let response = client
             .send_text("Generate a thumbnail sized picture of a capybara.")
             .await?;
-        println!("{:?}", response.images());
-        response
-            .images()
-            .first()
-            .expect("Expected image output(s).");
+        println!("Image response: {:?}", response.images());
+        if client.model.output.contains(&Modality::Image) {
+            response
+                .images()
+                .first()
+                .expect("Expected image output(s).");
+        }
+        println!("Text response: {:?}", response.text());
         Ok(())
     }
 
@@ -84,10 +90,12 @@ mod test {
 
         println!("Response text: {:?}", response.text());
 
-        println!(
-            "{:?}",
-            response.images().first().expect("Expected image output(s)")
-        );
+        if client.model.output.contains(&Modality::Image) {
+            println!(
+                "{:?}",
+                response.images().first().expect("Expected image output(s)")
+            );
+        }
 
         let response = client
             .send_text("What type of animal is in the image you sent?")

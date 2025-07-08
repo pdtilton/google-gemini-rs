@@ -8,8 +8,8 @@ use serde_json::Value;
 use thiserror::Error;
 
 use crate::google::{
-    GoogleModel,
-    common::{Blob, Content, FileData, FunctionCall, HarmCategory, Modality, Part, Role},
+    GoogleModel, GoogleModelVariant,
+    common::{Blob, Content, FileData, FunctionCall, HarmCategory, Part, Role},
     request::{GenerateContentRequest, GenerationConfig, HarmBlockThreshold, SafetySettings},
     response::ContentResponse,
 };
@@ -57,7 +57,7 @@ impl From<&Value> for Error {
 #[derive(Clone)]
 pub struct Client {
     client: reqwest::Client,
-    model: GoogleModel,
+    pub model: GoogleModel,
     key: String,
     request: GenerateContentRequest,
     mcps: Vec<Arc<rust_mcp_sdk::mcp_client::ClientRuntime>>,
@@ -139,17 +139,9 @@ impl Client {
             })
             .collect();
 
-        let generation_config = match &self.model {
-            GoogleModel::Gemini20FlashExpImageGen(_) => GenerationConfig {
-                response_modalities: vec![Modality::Text, Modality::Image],
-                ..Default::default()
-            },
-            GoogleModel::Gemini20Flash(_)
-            | GoogleModel::Gemini25Flash(_)
-            | GoogleModel::Gemini25Pro(_) => GenerationConfig {
-                response_modalities: vec![Modality::Text],
-                ..Default::default()
-            },
+        let generation_config = GenerationConfig {
+            response_modalities: self.model.output.clone(),
+            ..Default::default()
         };
 
         self.request.safety_settings = safety_settings;
@@ -164,7 +156,10 @@ impl Client {
     ) -> Result<Self, Error> {
         let mut tools = Vec::new();
 
-        if matches!(self.model, GoogleModel::Gemini20FlashExpImageGen(_)) {
+        if matches!(
+            self.model.variant,
+            GoogleModelVariant::Gemini20FlashExpImageGen
+        ) {
             return Err(Error::UnsupportedConfig(format!(
                 "Model {} does not support tool calls",
                 self.model
@@ -193,8 +188,8 @@ impl Client {
     /// not support system instructions, so in these cases we front-load the system instructions
     /// as user text content.
     pub fn with_instructions(&mut self, system_instruction: &str) -> &mut Self {
-        match self.model {
-            GoogleModel::Gemini20FlashExpImageGen(_) => {
+        match self.model.variant {
+            GoogleModelVariant::Gemini20FlashExpImageGen => {
                 // The 2.0 flash experimentation image gen model does not support system instructions
                 // as this time, so we'll front-load the instructions as a user message.
                 let mut contents = vec![Content {
@@ -206,9 +201,10 @@ impl Client {
 
                 self.request.contents = contents;
             }
-            GoogleModel::Gemini20Flash(_)
-            | GoogleModel::Gemini25Flash(_)
-            | GoogleModel::Gemini25Pro(_) => {
+            GoogleModelVariant::Gemini20Flash
+            | GoogleModelVariant::Gemini25Flash
+            | GoogleModelVariant::Gemini25FlashLight
+            | GoogleModelVariant::Gemini25Pro => {
                 self.request.system_instruction = Some(Content {
                     role: Role::User,
                     parts: vec![Part::Text(system_instruction.to_string())],
@@ -220,15 +216,6 @@ impl Client {
     }
 
     pub fn with_options(&mut self, options: &GenerationConfig) -> &mut Self {
-        let options = match &self.model {
-            GoogleModel::Gemini20FlashExpImageGen(_) => options.clone(),
-            GoogleModel::Gemini20Flash(_)
-            | GoogleModel::Gemini25Flash(_)
-            | GoogleModel::Gemini25Pro(_) => GenerationConfig {
-                response_modalities: vec![Modality::Text],
-                ..options.clone()
-            },
-        };
         self.request.generation_config = Some(options.clone());
         self
     }
@@ -244,7 +231,6 @@ impl Client {
 
         for response in responses {
             if let Some(error) = &response.error {
-                //return Err(Error::Request(serde_json::to_string(error)?));
                 return Err(error.into());
             } else {
                 for candidate in &response.candidates {
@@ -288,7 +274,7 @@ impl Client {
 
         for content in &response.content {
             let part = match content {
-                rust_mcp_sdk::schema::CallToolResultContentItem::TextContent(text_content) => {
+                rust_mcp_sdk::schema::ContentBlock::TextContent(text_content) => {
                     Part::FunctionResponse(crate::google::common::FunctionResponse {
                         id: None,
                         name: function_call.name.clone(),
@@ -297,7 +283,7 @@ impl Client {
                         )?,
                     })
                 }
-                rust_mcp_sdk::schema::CallToolResultContentItem::ImageContent(image_content) => {
+                rust_mcp_sdk::schema::ContentBlock::ImageContent(image_content) => {
                     Part::FunctionResponse(crate::google::common::FunctionResponse {
                         id: None,
                         name: function_call.name.clone(),
@@ -306,7 +292,7 @@ impl Client {
                         )?,
                     })
                 }
-                rust_mcp_sdk::schema::CallToolResultContentItem::AudioContent(audio_content) => {
+                rust_mcp_sdk::schema::ContentBlock::AudioContent(audio_content) => {
                     Part::FunctionResponse(crate::google::common::FunctionResponse {
                         id: None,
                         name: function_call.name.clone(),
@@ -315,15 +301,24 @@ impl Client {
                         )?,
                     })
                 }
-                rust_mcp_sdk::schema::CallToolResultContentItem::EmbeddedResource(
-                    embedded_resource,
-                ) => Part::FunctionResponse(crate::google::common::FunctionResponse {
-                    id: None,
-                    name: function_call.name.clone(),
-                    response: serde_json::from_str::<serde_json::Map<String, Value>>(
-                        &serde_json::to_string(embedded_resource)?,
-                    )?,
-                }),
+                rust_mcp_sdk::schema::ContentBlock::EmbeddedResource(embedded_resource) => {
+                    Part::FunctionResponse(crate::google::common::FunctionResponse {
+                        id: None,
+                        name: function_call.name.clone(),
+                        response: serde_json::from_str::<serde_json::Map<String, Value>>(
+                            &serde_json::to_string(embedded_resource)?,
+                        )?,
+                    })
+                }
+                rust_mcp_sdk::schema::ContentBlock::ResourceLink(resource_link) => {
+                    Part::FunctionResponse(crate::google::common::FunctionResponse {
+                        id: None,
+                        name: function_call.name.clone(),
+                        response: serde_json::from_str::<serde_json::Map<String, Value>>(
+                            &serde_json::to_string(resource_link)?,
+                        )?,
+                    })
+                }
             };
 
             parts.push(part);
@@ -477,7 +472,7 @@ impl Client {
     }
 
     fn url(&self) -> String {
-        format!("{URL_BASE}/{}{URL_EXTENSION}", self.model.name())
+        format!("{URL_BASE}/{}{URL_EXTENSION}", self.model.name)
     }
 
     /// Returns the entire session content.
