@@ -14,7 +14,7 @@ use rust_mcp_sdk::{
     mcp_server::{HyperServerOptions, ServerHandler, error::TransportServerError, hyper_server},
     schema::{
         ClientCapabilities, Implementation, InitializeRequestParams, InitializeResult,
-        LATEST_PROTOCOL_VERSION, ServerCapabilities, ServerCapabilitiesTools,
+        LATEST_PROTOCOL_VERSION, ServerCapabilities, ServerCapabilitiesTools, TextContent,
     },
 };
 use rust_mcp_sdk::{
@@ -70,7 +70,9 @@ pub struct SayHelloTool {}
 impl SayHelloTool {
     pub fn call_tool(&self) -> Result<CallToolResult, CallToolError> {
         let message = "Hello World\n".to_string();
-        Ok(CallToolResult::text_content(message, None))
+        Ok(CallToolResult::text_content(vec![TextContent::from(
+            message,
+        )]))
     }
 }
 
@@ -81,7 +83,9 @@ pub struct SayHiddenTool {}
 impl SayHiddenTool {
     pub fn call_tool(&self) -> Result<CallToolResult, CallToolError> {
         let message = format!("{}", SECRET);
-        Ok(CallToolResult::text_content(message, None))
+        Ok(CallToolResult::text_content(vec![TextContent::from(
+            message,
+        )]))
     }
 }
 
@@ -98,13 +102,15 @@ pub struct SaySecretsTool {
 impl SaySecretsTool {
     pub fn call_tool(&self) -> Result<CallToolResult, CallToolError> {
         let message = format!("{}_{}", SECRET2, self.sentinel);
-        Ok(CallToolResult::text_content(message, None))
+        Ok(CallToolResult::text_content(vec![TextContent::from(
+            message,
+        )]))
     }
 }
 
 #[derive(Debug, Deserialize, Serialize, JsonSchema)]
 pub struct NestedIndex {
-    index: u32,
+    index: i32,
 }
 
 #[mcp_tool(
@@ -121,7 +127,9 @@ pub struct SaySecretsComplex {
 impl SaySecretsComplex {
     pub fn call_tool(&self) -> Result<CallToolResult, CallToolError> {
         let message = format!("{}_{}_{}", SECRET3, self.sentinel, self.index.index);
-        Ok(CallToolResult::text_content(message, None))
+        Ok(CallToolResult::text_content(vec![TextContent::from(
+            message,
+        )]))
     }
 }
 
@@ -197,6 +205,7 @@ async fn mcp_server() -> Result<
         server_info: Implementation {
             name: "Hello World MCP Server".to_string(),
             version: "0.1.0".to_string(),
+            title: None,
         },
         capabilities: ServerCapabilities {
             // indicates that server support mcp tools
@@ -242,6 +251,7 @@ async fn test_mcp() -> Result<(), Error> {
         client_info: Implementation {
             name: "simple-rust-mcp-client-sse".into(),
             version: "0.1.0".into(),
+            title: None,
         },
         protocol_version: LATEST_PROTOCOL_VERSION.into(),
     };

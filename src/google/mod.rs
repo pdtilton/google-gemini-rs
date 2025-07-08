@@ -2,8 +2,9 @@
 
 use std::fmt::Display;
 
-use serde::{Deserialize, Serialize};
 use thiserror::Error;
+
+use crate::google::common::Modality;
 
 pub mod common;
 pub mod request;
@@ -18,131 +19,135 @@ pub enum Error {
 const GEMINI_2_0_FLASH_EXP_IMAGE_GEN: &str = "gemini-2.0-flash-exp-image-generation";
 const GEMINI_2_0_FLASH: &str = "gemini-2.0-flash";
 const GEMINI_2_5_FLASH: &str = "gemini-2.5-flash";
+const GEMINI_2_5_FLASH_LITE: &str = "gemini-2.5-flash-lite";
 const GEMINI_2_5_PRO: &str = "gemini-2.5-pro";
-
-#[derive(Debug, Clone, Hash, Serialize, Deserialize, Eq, PartialEq)]
-pub struct Gemini25Pro {
-    name: String,
-}
-
-impl Default for Gemini25Pro {
-    fn default() -> Self {
-        Self {
-            name: GEMINI_2_5_PRO.to_string(),
-        }
-    }
-}
-
-impl Gemini25Pro {
-    fn name(&self) -> String {
-        self.name.clone()
-    }
-}
-
-#[derive(Debug, Clone, Hash, Serialize, Deserialize, Eq, PartialEq)]
-pub struct Gemini25Flash {
-    name: String,
-}
-
-impl Default for Gemini25Flash {
-    fn default() -> Self {
-        Self {
-            name: GEMINI_2_5_FLASH.to_string(),
-        }
-    }
-}
-
-impl Gemini25Flash {
-    fn name(&self) -> String {
-        self.name.clone()
-    }
-}
-
-#[derive(Debug, Clone, Hash, Serialize, Deserialize, Eq, PartialEq)]
-pub struct Gemini20Flash {
-    name: String,
-}
-
-impl Default for Gemini20Flash {
-    fn default() -> Self {
-        Self {
-            name: GEMINI_2_0_FLASH.to_string(),
-        }
-    }
-}
-
-impl Gemini20Flash {
-    fn name(&self) -> String {
-        self.name.clone()
-    }
-}
-
-#[derive(Debug, Clone, Hash, Eq, PartialEq)]
-pub struct Gemini20FlashExpImageGen {
-    name: String,
-}
-
-impl Default for Gemini20FlashExpImageGen {
-    fn default() -> Self {
-        Self {
-            name: GEMINI_2_0_FLASH_EXP_IMAGE_GEN.to_string(),
-        }
-    }
-}
-
-impl Gemini20FlashExpImageGen {
-    fn name(&self) -> String {
-        self.name.clone()
-    }
-}
 
 /// Supported Google AI models.  Some models have different capabilities than others, so this
 /// enum may be used to branch the different capabilities.
 #[derive(Debug, Clone, Hash, Eq, PartialEq)]
-pub enum GoogleModel {
-    Gemini20FlashExpImageGen(Gemini20FlashExpImageGen),
-    Gemini20Flash(Gemini20Flash),
-    Gemini25Flash(Gemini25Flash),
-    Gemini25Pro(Gemini25Pro),
+pub enum GoogleModelVariant {
+    Gemini20FlashExpImageGen,
+    Gemini20Flash,
+    Gemini25Flash,
+    Gemini25Pro,
+    Gemini25FlashLight,
+}
+
+impl GoogleModelVariant {
+    fn name(&self) -> String {
+        match self {
+            GoogleModelVariant::Gemini20FlashExpImageGen => GEMINI_2_0_FLASH_EXP_IMAGE_GEN,
+            GoogleModelVariant::Gemini20Flash => GEMINI_2_0_FLASH,
+            GoogleModelVariant::Gemini25Flash => GEMINI_2_5_FLASH,
+            GoogleModelVariant::Gemini25Pro => GEMINI_2_5_PRO,
+            GoogleModelVariant::Gemini25FlashLight => GEMINI_2_5_FLASH_LITE,
+        }
+        .to_string()
+    }
+
+    fn inputs(&self) -> Vec<Modality> {
+        match self {
+            GoogleModelVariant::Gemini20FlashExpImageGen => vec![
+                Modality::Text,
+                Modality::Video,
+                Modality::Image,
+                Modality::Audio,
+            ],
+            GoogleModelVariant::Gemini20Flash => vec![
+                Modality::Text,
+                Modality::Video,
+                Modality::Image,
+                Modality::Audio,
+            ],
+            GoogleModelVariant::Gemini25Flash => vec![
+                Modality::Text,
+                Modality::Video,
+                Modality::Image,
+                Modality::Audio,
+            ],
+            GoogleModelVariant::Gemini25Pro => vec![
+                Modality::Text,
+                Modality::Video,
+                Modality::Image,
+                Modality::Audio,
+            ],
+            GoogleModelVariant::Gemini25FlashLight => vec![
+                Modality::Text,
+                Modality::Video,
+                Modality::Image,
+                Modality::Audio,
+            ],
+        }
+    }
+
+    fn outputs(&self) -> Vec<Modality> {
+        match self {
+            GoogleModelVariant::Gemini20FlashExpImageGen => {
+                vec![Modality::Text, Modality::Image]
+            }
+            GoogleModelVariant::Gemini20Flash => vec![Modality::Text],
+            GoogleModelVariant::Gemini25Flash => vec![Modality::Text],
+            GoogleModelVariant::Gemini25Pro => vec![Modality::Text],
+            GoogleModelVariant::Gemini25FlashLight => vec![Modality::Text],
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct GoogleModel {
+    pub variant: GoogleModelVariant,
+    pub name: String,
+    pub input: Vec<Modality>,
+    pub output: Vec<Modality>,
+}
+
+impl GoogleModel {
+    pub fn new(variant: GoogleModelVariant, suffix: Option<String>) -> Self {
+        let name = if let Some(suffix) = suffix {
+            format!("{}-{suffix}", variant.name())
+        } else {
+            variant.name()
+        };
+
+        let input = variant.inputs();
+        let output = variant.outputs();
+
+        Self {
+            variant,
+            name,
+            input,
+            output,
+        }
+    }
 }
 
 impl TryFrom<&str> for GoogleModel {
     type Error = Error;
 
     fn try_from(value: &str) -> Result<Self, Error> {
-        match value {
-            GEMINI_2_5_PRO => Ok(GoogleModel::Gemini25Pro(Gemini25Pro::default())),
-            GEMINI_2_5_FLASH => Ok(GoogleModel::Gemini25Flash(Gemini25Flash::default())),
-            GEMINI_2_0_FLASH => Ok(GoogleModel::Gemini20Flash(Gemini20Flash::default())),
-            GEMINI_2_0_FLASH_EXP_IMAGE_GEN => Ok(GoogleModel::Gemini20FlashExpImageGen(
-                Gemini20FlashExpImageGen::default(),
-            )),
+        let (model, preview) = if let Some((model, preview)) = value.split_once("-preview") {
+            (model, Some(format!("preview{preview}")))
+        } else {
+            (value, None)
+        };
+
+        println!("Model: {model} preview: {preview:?}");
+
+        let variant = match model {
+            GEMINI_2_5_PRO => Ok(GoogleModelVariant::Gemini25Pro),
+            GEMINI_2_5_FLASH => Ok(GoogleModelVariant::Gemini25Flash),
+            GEMINI_2_5_FLASH_LITE => Ok(GoogleModelVariant::Gemini25FlashLight),
+            GEMINI_2_0_FLASH => Ok(GoogleModelVariant::Gemini20Flash),
+            GEMINI_2_0_FLASH_EXP_IMAGE_GEN => Ok(GoogleModelVariant::Gemini20FlashExpImageGen),
             _ => Err(Error::NotFound(format!("No such model: {value}"))),
-        }
-    }
-}
+        }?;
 
-impl TryFrom<String> for GoogleModel {
-    type Error = Error;
-
-    fn try_from(value: String) -> Result<Self, Self::Error> {
-        value.as_str().try_into()
+        Ok(GoogleModel::new(variant, preview))
     }
 }
 
 impl Display for GoogleModel {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.name())
-    }
-}
-
-impl GoogleModel {
-    pub fn name(&self) -> String {
-        match self {
-            GoogleModel::Gemini20FlashExpImageGen(g) => g.name(),
-            GoogleModel::Gemini20Flash(g) => g.name(),
-            GoogleModel::Gemini25Flash(g) => g.name(),
-            GoogleModel::Gemini25Pro(g) => g.name(),
-        }
+        write!(f, "{}", self.name)
     }
 }
