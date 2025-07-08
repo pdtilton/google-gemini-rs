@@ -299,6 +299,28 @@ pub struct GenerationConfig {
     pub media_resolution: Option<MediaResolution>,
 }
 
+#[derive(Clone, Debug)]
+pub enum UpdateGenerationConfig {
+    StopSequences(Vec<String>),
+    ResponseMimeType(Option<String>),
+    ResponseSchema(Option<Schema>),
+    ResponseModalities(Vec<Modality>),
+    CandidateCount(Option<i32>),
+    MaxOutputTokens(Option<i32>),
+    Temperature(Option<f32>),
+    TopP(Option<f32>),
+    TopK(Option<i32>),
+    Seed(Option<i32>),
+    PresencePenalty(Option<f32>),
+    FrequencyPenalty(Option<f32>),
+    ResponseLogprobs(Option<bool>),
+    Logprobs(Option<i32>),
+    EnableEnhancedCivicAnswers(Option<bool>),
+    SpeechConfig(Option<SpeechConfig>),
+    ThinkingConfig(Option<ThinkingConfig>),
+    MediaResolution(Option<MediaResolution>),
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GenerateContentRequest {

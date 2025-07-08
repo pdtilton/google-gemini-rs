@@ -10,7 +10,10 @@ use thiserror::Error;
 use crate::google::{
     GoogleModel, GoogleModelVariant,
     common::{Blob, Content, FileData, FunctionCall, HarmCategory, Part, Role},
-    request::{GenerateContentRequest, GenerationConfig, HarmBlockThreshold, SafetySettings},
+    request::{
+        GenerateContentRequest, GenerationConfig, HarmBlockThreshold, SafetySettings,
+        UpdateGenerationConfig,
+    },
     response::ContentResponse,
 };
 
@@ -184,6 +187,67 @@ impl Client {
         self.to_owned()
     }
 
+    pub fn update_options(&mut self, updates: &[UpdateGenerationConfig]) -> Self {
+        let mut gen_config = self.request.clone().generation_config.unwrap_or_default();
+
+        for update in updates {
+            match update {
+                UpdateGenerationConfig::StopSequences(items) => {
+                    gen_config.stop_sequences = items.clone()
+                }
+                UpdateGenerationConfig::ResponseMimeType(response_mime_type) => {
+                    gen_config.response_mime_type = response_mime_type.clone()
+                }
+                UpdateGenerationConfig::ResponseSchema(schema) => {
+                    gen_config.response_schema = schema.clone()
+                }
+                UpdateGenerationConfig::ResponseModalities(items) => {
+                    gen_config.response_modalities = items.clone()
+                }
+                UpdateGenerationConfig::CandidateCount(candidate_count) => {
+                    gen_config.candidate_count = candidate_count.clone()
+                }
+                UpdateGenerationConfig::MaxOutputTokens(max_output_tokens) => {
+                    gen_config.max_output_tokens = max_output_tokens.clone()
+                }
+                UpdateGenerationConfig::Temperature(temp) => gen_config.temperature = temp.clone(),
+                UpdateGenerationConfig::TopP(topp) => gen_config.top_p = topp.clone(),
+                UpdateGenerationConfig::TopK(topk) => gen_config.top_k = topk.clone(),
+                UpdateGenerationConfig::Seed(seed) => gen_config.seed = seed.clone(),
+                UpdateGenerationConfig::PresencePenalty(presence_penalty) => {
+                    gen_config.presence_penalty = presence_penalty.clone()
+                }
+                UpdateGenerationConfig::FrequencyPenalty(frequency_penalty) => {
+                    gen_config.frequency_penalty = frequency_penalty.clone()
+                }
+                UpdateGenerationConfig::ResponseLogprobs(response_logprobs) => {
+                    gen_config.response_logprobs = response_logprobs.clone()
+                }
+                UpdateGenerationConfig::Logprobs(logprobs) => {
+                    gen_config.logprobs = logprobs.clone()
+                }
+                UpdateGenerationConfig::EnableEnhancedCivicAnswers(
+                    enable_enhanced_civic_answers,
+                ) => {
+                    gen_config.enable_enhanced_civic_answers = enable_enhanced_civic_answers.clone()
+                }
+                UpdateGenerationConfig::SpeechConfig(speech_config) => {
+                    gen_config.speech_config = speech_config.clone()
+                }
+                UpdateGenerationConfig::ThinkingConfig(thinking_config) => {
+                    gen_config.thinking_config = thinking_config.clone()
+                }
+                UpdateGenerationConfig::MediaResolution(media_resolution) => {
+                    gen_config.media_resolution = media_resolution.clone()
+                }
+            }
+        }
+
+        self.request.generation_config = Some(gen_config);
+
+        self.to_owned()
+    }
+
     /// Mutate the client by setting the specified system instructions.  Some models do
     /// not support system instructions, so in these cases we front-load the system instructions
     /// as user text content.
@@ -201,10 +265,7 @@ impl Client {
 
                 self.request.contents = contents;
             }
-            GoogleModelVariant::Gemini20Flash
-            | GoogleModelVariant::Gemini25Flash
-            | GoogleModelVariant::Gemini25FlashLight
-            | GoogleModelVariant::Gemini25Pro => {
+            _ => {
                 self.request.system_instruction = Some(Content {
                     role: Role::User,
                     parts: vec![Part::Text(system_instruction.to_string())],
