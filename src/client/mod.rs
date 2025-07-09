@@ -10,7 +10,10 @@ use thiserror::Error;
 use crate::google::{
     GoogleModel, GoogleModelVariant,
     common::{Blob, Content, FileData, FunctionCall, HarmCategory, Part, Role},
-    request::{GenerateContentRequest, GenerationConfig, HarmBlockThreshold, SafetySettings},
+    request::{
+        GenerateContentRequest, GenerationConfig, HarmBlockThreshold, SafetySettings,
+        UpdateGenConfig,
+    },
     response::ContentResponse,
 };
 
@@ -184,6 +187,61 @@ impl Client {
         self.to_owned()
     }
 
+    pub fn update_options(&mut self, updates: &[UpdateGenConfig]) -> Self {
+        let mut gen_config = self.request.clone().generation_config.unwrap_or_default();
+
+        for update in updates {
+            match update {
+                UpdateGenConfig::StopSequences(items) => gen_config.stop_sequences = items.clone(),
+                UpdateGenConfig::ResponseMimeType(response_mime_type) => {
+                    gen_config.response_mime_type = response_mime_type.clone()
+                }
+                UpdateGenConfig::ResponseSchema(schema) => {
+                    gen_config.response_schema = schema.clone()
+                }
+                UpdateGenConfig::ResponseModalities(items) => {
+                    gen_config.response_modalities = items.clone()
+                }
+                UpdateGenConfig::CandidateCount(candidate_count) => {
+                    gen_config.candidate_count = *candidate_count
+                }
+                UpdateGenConfig::MaxOutputTokens(max_output_tokens) => {
+                    gen_config.max_output_tokens = *max_output_tokens
+                }
+                UpdateGenConfig::Temperature(temp) => gen_config.temperature = *temp,
+                UpdateGenConfig::TopP(topp) => gen_config.top_p = *topp,
+                UpdateGenConfig::TopK(topk) => gen_config.top_k = *topk,
+                UpdateGenConfig::Seed(seed) => gen_config.seed = *seed,
+                UpdateGenConfig::PresencePenalty(presence_penalty) => {
+                    gen_config.presence_penalty = *presence_penalty
+                }
+                UpdateGenConfig::FrequencyPenalty(frequency_penalty) => {
+                    gen_config.frequency_penalty = *frequency_penalty
+                }
+                UpdateGenConfig::ResponseLogprobs(response_logprobs) => {
+                    gen_config.response_logprobs = *response_logprobs
+                }
+                UpdateGenConfig::Logprobs(logprobs) => gen_config.logprobs = *logprobs,
+                UpdateGenConfig::EnableEnhancedCivicAnswers(enable_enhanced_civic_answers) => {
+                    gen_config.enable_enhanced_civic_answers = *enable_enhanced_civic_answers
+                }
+                UpdateGenConfig::SpeechConfig(speech_config) => {
+                    gen_config.speech_config = speech_config.clone()
+                }
+                UpdateGenConfig::ThinkingConfig(thinking_config) => {
+                    gen_config.thinking_config = thinking_config.clone()
+                }
+                UpdateGenConfig::MediaResolution(media_resolution) => {
+                    gen_config.media_resolution = media_resolution.clone()
+                }
+            }
+        }
+
+        self.request.generation_config = Some(gen_config);
+
+        self.to_owned()
+    }
+
     /// Mutate the client by setting the specified system instructions.  Some models do
     /// not support system instructions, so in these cases we front-load the system instructions
     /// as user text content.
@@ -201,10 +259,7 @@ impl Client {
 
                 self.request.contents = contents;
             }
-            GoogleModelVariant::Gemini20Flash
-            | GoogleModelVariant::Gemini25Flash
-            | GoogleModelVariant::Gemini25FlashLight
-            | GoogleModelVariant::Gemini25Pro => {
+            _ => {
                 self.request.system_instruction = Some(Content {
                     role: Role::User,
                     parts: vec![Part::Text(system_instruction.to_string())],
