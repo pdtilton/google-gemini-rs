@@ -12,7 +12,7 @@ use crate::google::{
     common::{Blob, Content, FileData, FunctionCall, HarmCategory, Part, Role},
     request::{
         GenerateContentRequest, GenerationConfig, HarmBlockThreshold, SafetySettings,
-        UpdateGenerationConfig,
+        UpdateGenConfig,
     },
     response::ContentResponse,
 };
@@ -187,57 +187,51 @@ impl Client {
         self.to_owned()
     }
 
-    pub fn update_options(&mut self, updates: &[UpdateGenerationConfig]) -> Self {
+    pub fn update_options(&mut self, updates: &[UpdateGenConfig]) -> Self {
         let mut gen_config = self.request.clone().generation_config.unwrap_or_default();
 
         for update in updates {
             match update {
-                UpdateGenerationConfig::StopSequences(items) => {
-                    gen_config.stop_sequences = items.clone()
-                }
-                UpdateGenerationConfig::ResponseMimeType(response_mime_type) => {
+                UpdateGenConfig::StopSequences(items) => gen_config.stop_sequences = items.clone(),
+                UpdateGenConfig::ResponseMimeType(response_mime_type) => {
                     gen_config.response_mime_type = response_mime_type.clone()
                 }
-                UpdateGenerationConfig::ResponseSchema(schema) => {
+                UpdateGenConfig::ResponseSchema(schema) => {
                     gen_config.response_schema = schema.clone()
                 }
-                UpdateGenerationConfig::ResponseModalities(items) => {
+                UpdateGenConfig::ResponseModalities(items) => {
                     gen_config.response_modalities = items.clone()
                 }
-                UpdateGenerationConfig::CandidateCount(candidate_count) => {
-                    gen_config.candidate_count = candidate_count.clone()
+                UpdateGenConfig::CandidateCount(candidate_count) => {
+                    gen_config.candidate_count = *candidate_count
                 }
-                UpdateGenerationConfig::MaxOutputTokens(max_output_tokens) => {
-                    gen_config.max_output_tokens = max_output_tokens.clone()
+                UpdateGenConfig::MaxOutputTokens(max_output_tokens) => {
+                    gen_config.max_output_tokens = *max_output_tokens
                 }
-                UpdateGenerationConfig::Temperature(temp) => gen_config.temperature = temp.clone(),
-                UpdateGenerationConfig::TopP(topp) => gen_config.top_p = topp.clone(),
-                UpdateGenerationConfig::TopK(topk) => gen_config.top_k = topk.clone(),
-                UpdateGenerationConfig::Seed(seed) => gen_config.seed = seed.clone(),
-                UpdateGenerationConfig::PresencePenalty(presence_penalty) => {
-                    gen_config.presence_penalty = presence_penalty.clone()
+                UpdateGenConfig::Temperature(temp) => gen_config.temperature = *temp,
+                UpdateGenConfig::TopP(topp) => gen_config.top_p = *topp,
+                UpdateGenConfig::TopK(topk) => gen_config.top_k = *topk,
+                UpdateGenConfig::Seed(seed) => gen_config.seed = *seed,
+                UpdateGenConfig::PresencePenalty(presence_penalty) => {
+                    gen_config.presence_penalty = *presence_penalty
                 }
-                UpdateGenerationConfig::FrequencyPenalty(frequency_penalty) => {
-                    gen_config.frequency_penalty = frequency_penalty.clone()
+                UpdateGenConfig::FrequencyPenalty(frequency_penalty) => {
+                    gen_config.frequency_penalty = *frequency_penalty
                 }
-                UpdateGenerationConfig::ResponseLogprobs(response_logprobs) => {
-                    gen_config.response_logprobs = response_logprobs.clone()
+                UpdateGenConfig::ResponseLogprobs(response_logprobs) => {
+                    gen_config.response_logprobs = *response_logprobs
                 }
-                UpdateGenerationConfig::Logprobs(logprobs) => {
-                    gen_config.logprobs = logprobs.clone()
+                UpdateGenConfig::Logprobs(logprobs) => gen_config.logprobs = *logprobs,
+                UpdateGenConfig::EnableEnhancedCivicAnswers(enable_enhanced_civic_answers) => {
+                    gen_config.enable_enhanced_civic_answers = *enable_enhanced_civic_answers
                 }
-                UpdateGenerationConfig::EnableEnhancedCivicAnswers(
-                    enable_enhanced_civic_answers,
-                ) => {
-                    gen_config.enable_enhanced_civic_answers = enable_enhanced_civic_answers.clone()
-                }
-                UpdateGenerationConfig::SpeechConfig(speech_config) => {
+                UpdateGenConfig::SpeechConfig(speech_config) => {
                     gen_config.speech_config = speech_config.clone()
                 }
-                UpdateGenerationConfig::ThinkingConfig(thinking_config) => {
+                UpdateGenConfig::ThinkingConfig(thinking_config) => {
                     gen_config.thinking_config = thinking_config.clone()
                 }
-                UpdateGenerationConfig::MediaResolution(media_resolution) => {
+                UpdateGenConfig::MediaResolution(media_resolution) => {
                     gen_config.media_resolution = media_resolution.clone()
                 }
             }

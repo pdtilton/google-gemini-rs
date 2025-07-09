@@ -299,8 +299,9 @@ pub struct GenerationConfig {
     pub media_resolution: Option<MediaResolution>,
 }
 
+/// Helper enum for updating portion of the GenerationConfig struct.
 #[derive(Clone, Debug)]
-pub enum UpdateGenerationConfig {
+pub enum UpdateGenConfig {
     StopSequences(Vec<String>),
     ResponseMimeType(Option<String>),
     ResponseSchema(Option<Schema>),
